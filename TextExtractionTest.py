@@ -1,8 +1,6 @@
 import PyPDF2 as pdf
 import re
 import glob
-import pymongo
-import datetime
 from datetime import datetime
 
 
