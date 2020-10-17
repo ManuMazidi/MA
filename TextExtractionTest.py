@@ -148,7 +148,7 @@ from nltk.stem.porter import PorterStemmer
 from gensim.models.coherencemodel import CoherenceModel
 import matplotlib.pyplot as plt
 
-def prepare_corpus(doc_clean):
+def prepare_corpus(doc_clean): #corpus for LSA Model
     """
     Input  : clean document
     Purpose: create term dictionary of our courpus and Converting list of documents (corpus) into Document Term Matrix
@@ -161,10 +161,10 @@ def prepare_corpus(doc_clean):
     # generate LDA model
     return dictionary,doc_term_matrix
 
-prepare_corpus(preprocessed_texts)
 
 # create a dictionary object, e.g. if you want to know of how many unique tokens your dictionary from your corpus consists of:
-dct = Dictionary(preprocessed_texts)
+from gensim.corpora import Dictionary
+dct = corpora.Dictionary(preprocessed_texts)
 
 
 
@@ -216,7 +216,7 @@ def plot_graph(doc_clean,start, stop, step):
 
 
 # LSA Model
-number_of_topics=8
+number_of_topics=4
 words=10
 #document_list,titles=load_data("","articles.txt")
 model=create_gensim_lsa_model(preprocessed_texts,number_of_topics,words)
@@ -224,3 +224,43 @@ model=create_gensim_lsa_model(preprocessed_texts,number_of_topics,words)
 # Create Plot from LSA Model
 start,stop,step=2,12,1
 plot_graph(preprocessed_texts,start,stop,step)
+
+
+
+
+
+# CREATE GENSIM LDA MODEL
+from gensim.parsing.preprocessing import STOPWORDS
+from gensim.utils import simple_preprocess
+from gensim.models import TfidfModel, LsiModel
+from gensim.models.ldamodel import LdaModel
+from gensim import corpora
+from gensim import matutils
+import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
+from collections import defaultdict
+import pyLDAvis.gensim as gensimvis
+import pyLDAvis
+import pandas as pd
+import numpy as np
+import pickle
+import lda
+
+
+# Convert texts to lda-specific corpous
+lda_corpus = [dct.doc2bow(text) for text in preprocessed_texts]
+
+# fit LDA model
+speeches_topics = LdaModel(corpus=lda_corpus,
+                           id2word=dct,
+                           num_topics=8,
+                           passes=5)
+
+# print out first 8 topics
+for i, topic in enumerate(speeches_topics.print_topics(8)):
+    print (i, topic)
+
+
+# visualization of topics
+#vis_data = gensimvis.prepare(speeches_topics, lda_corpus, dct)
+#pyLDAvis.display(vis_data)
