@@ -2,11 +2,14 @@
 ### EMAIL: manuel.mazidi@gmail.com
 ### GITHUB: https://github.com/ManuMazidi/MA
 
+import pandas as pd
 import PyPDF2 as pdf
 import re
 import glob
+import datetime
 from datetime import datetime
-import spacy
+import pickle
+#import rpy2
 import en_core_web_sm
 
 
@@ -17,24 +20,23 @@ file_paths = glob.glob('/Users/manu/Documents/MA/Data/*')
 
 # create empty list that will be raw corpus and save dates in a list
 raw_corpus = []
-communication_dates = []
+transcript_date = []
 
-# EXTRACT AND CLEAN TEXT
-# the following for-loop extracts dates of the PDFs, number of pages and raw text
 for filename in file_paths:
 
     # get the date of the file
     find_date = re.search("[0-9]{8}", filename)
     pdf_date = datetime.strptime(find_date.group(), '%Y%m%d')
     pdf_datetime = pdf_date.date()
-    communication_dates.append(pdf_datetime)
+    transcript_date.append(pdf_datetime)
+    # print(pdf_datetime)
 
     # read PDF
     pdf_file = open(filename, 'rb')
     read_pdf = pdf.PdfFileReader(pdf_file)
     number_of_pages = read_pdf.getNumPages()
 
-    # get number of pages per file if you need
+    # get number of pages per file
     # print(number_of_pages)
 
     # get text by extracting every page and then append it
@@ -43,19 +45,57 @@ for filename in file_paths:
         page = read_pdf.getPage(page_number)
         page_content += page.extractText()  # concate reading pages.
 
-    # clean up extracted text, you may want to add or remove some features depending on PDF
-    # this works for FED FOMC Minutes
+    # clean up extracted single text
     new_content = page_content.replace('\n', '')
     new_content = new_content.replace(' o ', '')
-    new_content = new_content.replace(' ', ' ')
     new_content = new_content.replace('  ', ' ')
+    new_content = new_content.replace('   ', ' ')
     new_content = new_content.replace('Š', ' ')
     new_content = new_content.replace('™', '')
     new_content = new_content.replace('-', '')
     new_content = new_content.replace('Œ', '-')
 
+    # collocations
+    new_content = new_content.replace('federal funds rate', 'federal_funds_rate')
+    new_content = new_content.replace('federal funds', 'federal_funds')
+    new_content = new_content.replace('Board of Governors', 'board_of_governors')
+    new_content = new_content.replace('Federal Reserve System', 'federal_reserve_system')
+    new_content = new_content.replace('Federal Open Market Committee', 'federal_open_market_committee')
+    new_content = new_content.replace('labor market', 'labor_markets')
+    new_content = new_content.replace('economic outlook', 'economic_outlook')
+    new_content = new_content.replace('Economic Outlook', 'economic_outlook')
+    new_content = new_content.replace('Federal Reserve Bank', 'federal_reserve_bank')
+    new_content = new_content.replace('Federal Reserve', 'federal_reserve')
+    new_content = new_content.replace('inflation rate', 'inflation_rate')
+    new_content = new_content.replace('Open Market Operations', 'open_market_operations')
+    new_content = new_content.replace('financial markets', 'financial_market')
+    new_content = new_content.replace('financial market', 'financial_market')
+    new_content = new_content.replace('foreign exchange value', 'foreign_exchange_value')
+    new_content = new_content.replace('Authorization for Foreign Currency Operations',
+                                      'authorization_for_foreign_currency_operations')
+    new_content = new_content.replace('Foreign Authorization', 'foreign_authorization')
+    new_content = new_content.replace('Foreign Currency Operations', 'foreign_currency_operations')
+    new_content = new_content.replace('foreign currency', 'foreign_currency')
+    new_content = new_content.replace('central banks', 'central_bank')
+    new_content = new_content.replace('central bank', 'central_bank')
+    new_content = new_content.replace('swap rates', 'swap_rates')
+    new_content = new_content.replace('monetary policy', 'monetary_policy')
+    new_content = new_content.replace('swap rates', 'swap_rates')
+    new_content = new_content.replace('unemployment rate', 'unemployment_rate')
+    new_content = new_content.replace('market participants', 'market_participants')
+    new_content = new_content.replace('Market Participants', 'market_participants')
+    new_content = new_content.replace('target range', 'target_range')
+
+    # print(new_content)
+
     # save clean text in list
     raw_corpus.append(new_content)
+
+
+# Dump Dates and Transcripts in a Dataframe
+transcript_dct = {'Dates':transcript_date,'Transcripts':raw_corpus}
+transcript_df = pd.DataFrame(transcript_dct)
+speeches = transcript_df.Transcripts
 
 
 
@@ -74,8 +114,8 @@ nlp = en_core_web_sm.load()
 # removes digits (you may want to keep them depending on task..)
 def is_token_allowed(token):
     '''
-         Only allow valid tokens which are not stop words,
-         punctuation symbols and digits.
+         Only allow valid tokens which are not stop words
+         and punctuation symbols and digits.
     '''
     # not sure if token.is_digit should be included so that no numbers in output...
     if (not token or not token.string.strip() or token.is_stop or token.is_punct or token.is_digit):
@@ -87,22 +127,21 @@ def preprocess_token(token):
      return token.lemma_.strip().lower()
 
 
-# the cleaned pre-processed text in saved in a list 'preprocessed_texts'
+# the cleaned pre-processed text is saved in a list 'preprocessed_texts'
 preprocessed_texts = []
-clean_docs = []     # might be useful later for named-entity recognition
 for clean_text in raw_corpus:
     # create doc object
     clean_doc = nlp(clean_text)
-    clean_docs.append(clean_doc)
+
     # preprocessing
     complete_filtered_tokens = [preprocess_token(token) for token in clean_doc if is_token_allowed(token)]
 
     # save tokens of each text in list
     preprocessed_texts.append(complete_filtered_tokens)
 
-# it might be an advantage to discard all words that only appear once in a text
-# the following nested for loop discards all words that only appear once per document
-# if you wish to keep words with word count = 1, transform next few lines to comments
+# it might be an advantage to discard all words that only appear twice in a text
+# the following nested for loop discards all words that only appear twice per document
+# if you wish to keep words with word count = 2, transform next few lines to comments
 # Count word frequencies
 from collections import defaultdict
 
@@ -111,8 +150,44 @@ for text in preprocessed_texts:
     for token in text:
         frequency[token] += 1
 
-preprocessed_texts = [[token for token in text if frequency[token] > 1] for text in preprocessed_texts]
-# --- comments until here if you wish to keep words with word count = 1
+preprocessed_texts = [[token for token in text if frequency[token] > 2] for text in preprocessed_texts]
+# --- comments until here if you wish to keep words with word count = 2
+
+
+
+# Once we have preprocessed tokenized text, we might want to extract frequent bi- and trigrams to find out,
+# which words form a collocation and should not be considered in isolation.
+
+# Bigrams and Trigrams
+from nltk.metrics import BigramAssocMeasures
+from nltk.collocations import BigramCollocationFinder
+from nltk.collocations import TrigramCollocationFinder
+from nltk.metrics import TrigramAssocMeasures
+
+bigram_list = []
+trigram_list = []
+for text in preprocessed_texts:
+    bigram_collocation = BigramCollocationFinder.from_words(text)
+    trigram_collocation = TrigramCollocationFinder.from_words(text)
+    bigram_list.append(bigram_collocation.nbest(BigramAssocMeasures.likelihood_ratio, 5))
+    trigram_list.append(trigram_collocation.nbest(TrigramAssocMeasures.likelihood_ratio, 5))
+
+ngram_list = bigram_list + trigram_list
+print(ngram_list)
+
+output_list = []
+for n in range(0, len(ngram_list)):
+    for sub_list in ngram_list[n]:
+        output_list.append(sub_list)
+
+
+
+from collections import Counter
+
+gram_freq = Counter(output_list)
+common_grams = gram_freq.most_common(30)
+print(common_grams)
+
 
 
 # it might be interesting to look at the top five words that appear the most in a single PDF
@@ -250,10 +325,13 @@ import lda
 # Convert texts to lda-specific corpous
 lda_corpus = [dct.doc2bow(text) for text in preprocessed_texts]
 
+#set number of topics
+num_topics = 8
+
 # fit LDA model
 speeches_topics = LdaModel(corpus=lda_corpus,
                            id2word=dct,
-                           num_topics=8,
+                           num_topics=num_topics,
                            passes=5)
 
 # print out first 8 topics
@@ -264,3 +342,41 @@ for i, topic in enumerate(speeches_topics.print_topics(8)):
 # visualization of topics
 #vis_data = gensimvis.prepare(speeches_topics, lda_corpus, dct)
 #pyLDAvis.display(vis_data)
+
+
+
+
+# extract all document-topic distritbutions to dictionnary
+document_key = list(speeches.index)
+document_topic = {}
+for doc_id in range(len(lda_corpus)):
+    docbok = lda_corpus[doc_id]
+    doc_topics = speeches_topics.get_document_topics(docbok, 0)
+    tmp = []
+    for topic_id, topic_prob in doc_topics:
+        tmp.append(topic_prob)
+    document_topic[document_key[doc_id]] = tmp
+
+
+column_names = ['topic_'+str(i) for i in range(1, num_topics + 1)]
+
+
+# Topic Distribution over time
+topic_df = pd.DataFrame(document_topic)
+topic_df_T =  topic_df.transpose()
+topic_df_T["Date"] = transcript_date
+sorted_df = topic_df_T.sort_values(by = "Date")
+sorted_df['datetime'] = pd.to_datetime(sorted_df['Date'])
+sorted_indexed_df = sorted_df.set_index('datetime')
+sorted_indexed_df.drop(['Date'], axis=1, inplace=True)
+
+for i in range(1,num_topics+1):
+    sorted_indexed_df.rename(columns={i-1: column_names[i-1]}, inplace = True)
+
+# round topic distributions
+df = 100 * sorted_indexed_df.div(sorted_indexed_df.sum(axis=1), axis=0)  # normalize topic frequencies by year
+df = np.round(df, 1)  # round topic frequencies
+print(df)
+
+# save distribution to csv
+df.to_csv('topics_by_date.csv', sep=',')
